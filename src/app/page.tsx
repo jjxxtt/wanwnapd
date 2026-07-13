@@ -117,7 +117,7 @@ export default function Home() {
   const [canvasHeight, setCanvasHeight] = useState<number>(100);
   const [similarityThreshold, setSimilarityThreshold] = useState<number>(0);
   // 添加像素化模式状态
-  const [pixelationMode, setPixelationMode] = useState<PixelationMode>(PixelationMode.Dominant); // 默认为卡通模式
+  const [pixelationMode] = useState<PixelationMode>(PixelationMode.Dominant); // 默认为卡通模式
   
   // 新增：色号系统选择状态
   const [selectedColorSystem] = useState<ColorSystem>('MARD');
