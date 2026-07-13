@@ -114,12 +114,8 @@ import FocusModePreDownloadModal from '../components/FocusModePreDownloadModal';
 export default function Home() {
   const [originalImageSrc, setOriginalImageSrc] = useState<string | null>(null);
   const [granularity, setGranularity] = useState<number>(100);
-  const [granularityInput, setGranularityInput] = useState<string>("100");
   const [canvasHeight, setCanvasHeight] = useState<number>(100);
-  const [canvasHeightInput, setCanvasHeightInput] = useState<string>("100");
-  const [selectedCanvasPreset, setSelectedCanvasPreset] = useState<string>("100×100");
   const [similarityThreshold, setSimilarityThreshold] = useState<number>(0);
-  const [similarityThresholdInput, setSimilarityThresholdInput] = useState<string>("0");
   // 添加像素化模式状态
   const [pixelationMode, setPixelationMode] = useState<PixelationMode>(PixelationMode.Dominant); // 默认为卡通模式
   
@@ -147,7 +143,6 @@ export default function Home() {
   const [isEraseMode, setIsEraseMode] = useState<boolean>(false);
   const [customPaletteSelections, setCustomPaletteSelections] = useState<PaletteSelections>({});
   const [isCustomPaletteEditorOpen, setIsCustomPaletteEditorOpen] = useState<boolean>(false);
-  const [isCustomPalette, setIsCustomPalette] = useState<boolean>(false);
   
   // ++ 新增：下载设置相关状态 ++
   const [isDownloadSettingsOpen, setIsDownloadSettingsOpen] = useState<boolean>(false);
@@ -209,9 +204,6 @@ export default function Home() {
   }
   const [editHistory, setEditHistory] = useState<EditSnapshot[]>([]);
 
-  // 新增：一键去背景撤回快照（单步）
-  const [bgRemovalSnapshot, setBgRemovalSnapshot] = useState<EditSnapshot | null>(null);
-
   // 新增：轻量提示
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const showToast = useCallback((msg: string) => {
@@ -270,16 +262,6 @@ export default function Home() {
     setEditHistory(prev => prev.slice(0, -1));
     showToast('已撤回上一步');
   }, [editHistory, showToast]);
-
-  // 一键去背景单步撤回
-  const handleUndoBgRemoval = useCallback(() => {
-    if (!bgRemovalSnapshot) return;
-    setMappedPixelData(bgRemovalSnapshot.mappedPixelData);
-    setColorCounts(bgRemovalSnapshot.colorCounts);
-    setTotalBeadCount(bgRemovalSnapshot.totalBeadCount);
-    setBgRemovalSnapshot(null);
-    showToast('已撤回背景去除');
-  }, [bgRemovalSnapshot, showToast]);
 
   // 清空编辑历史（参数变化、退出编辑模式等时调用）
   const clearEditHistory = useCallback(() => {
@@ -367,13 +349,6 @@ export default function Home() {
     setActiveBeadPalette(convertedPalette);
   }, [customPaletteSelections, excludedColorKeys, remapTrigger, selectedColorSystem]);
 
-  // ++ 添加：当状态变化时同步更新输入框的值 ++
-  useEffect(() => {
-    setGranularityInput(granularity.toString());
-    setCanvasHeightInput(canvasHeight.toString());
-    setSimilarityThresholdInput(similarityThreshold.toString());
-  }, [granularity, canvasHeight, similarityThreshold]);
-
   // ++ Calculate unique colors currently on the grid for the palette ++
   const currentGridColors = useMemo(() => {
     if (!mappedPixelData) return [];
@@ -432,7 +407,6 @@ export default function Home() {
       
       if (hasValidData) {
         setCustomPaletteSelections(validSelections);
-    setIsCustomPalette(true);
     } else {
         console.log('所有数据都无效，清除localStorage并重新初始化');
         // 如果本地数据无效，清除localStorage并默认选择所有颜色
@@ -440,7 +414,6 @@ export default function Home() {
         const allHexValues = fullBeadPalette.map(color => color.hex.toUpperCase());
         const initialSelections = presetToSelections(allHexValues, allHexValues);
       setCustomPaletteSelections(initialSelections);
-      setIsCustomPalette(false);
     }
     } else {
       console.log('没有localStorage数据，默认选择所有颜色');
@@ -448,7 +421,6 @@ export default function Home() {
       const allHexValues = fullBeadPalette.map(color => color.hex.toUpperCase());
       const initialSelections = presetToSelections(allHexValues, allHexValues);
       setCustomPaletteSelections(initialSelections);
-      setIsCustomPalette(false);
     }
   }, []); // 只在组件首次加载时执行
 
@@ -680,10 +652,7 @@ export default function Home() {
           
           // 设置格子数量为导入的尺寸，避免重新映射时尺寸被修改
           setGranularity(gridDimensions.N);
-          setGranularityInput(gridDimensions.N.toString());
           setCanvasHeight(gridDimensions.M);
-          setCanvasHeightInput(gridDimensions.M.toString());
-          setSelectedCanvasPreset(`${gridDimensions.N}×${gridDimensions.M}`);
           
           alert(`成功导入CSV文件！图纸尺寸：${gridDimensions.N}x${gridDimensions.M}，共使用${Object.keys(colorCountsMap).length}种颜色。`);
         })
@@ -704,11 +673,8 @@ export default function Home() {
         // ++ 重置横轴格子数量为默认值 ++
         const defaultGranularity = 100;
         setGranularity(defaultGranularity);
-        setGranularityInput(defaultGranularity.toString());
         setCanvasHeight(defaultGranularity);
-        setCanvasHeightInput(defaultGranularity.toString());
         setSimilarityThreshold(0);
-        setSimilarityThresholdInput('0');
         setRemapTrigger(prev => prev + 1); // Trigger full remap for new image
       };
 
@@ -774,113 +740,13 @@ export default function Home() {
     }
   };
 
-  // ++ 新增：处理输入框变化的函数 ++
-  const handleGranularityInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setGranularityInput(event.target.value);
-  };
-
-  const handleCanvasHeightInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setCanvasHeightInput(event.target.value);
-  };
-
-  // ++ 添加：处理相似度输入框变化的函数 ++
-  const handleSimilarityThresholdInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setSimilarityThresholdInput(event.target.value);
-  };
-
-  // ++ 修改：处理确认按钮点击的函数，同时处理两个参数 ++
-  const handleConfirmParameters = () => {
-    // 处理画幅宽高
-    const minGranularity = 10;
-    const maxGranularity = 300;
-    let newGranularity = parseInt(granularityInput, 10);
-    let newCanvasHeight = parseInt(canvasHeightInput, 10);
-
-    if (isNaN(newGranularity) || newGranularity < minGranularity) {
-      newGranularity = minGranularity;
-    } else if (newGranularity > maxGranularity) {
-      newGranularity = maxGranularity;
-    }
-
-    if (isNaN(newCanvasHeight) || newCanvasHeight < minGranularity) {
-      newCanvasHeight = minGranularity;
-    } else if (newCanvasHeight > maxGranularity) {
-      newCanvasHeight = maxGranularity;
-    }
-
-    if (originalImageSrc) {
-      newCanvasHeight = getPreservedCanvasHeight(newGranularity, newCanvasHeight);
-    }
-
-    // 处理相似度阈值
-    const minSimilarity = 0;
-    const maxSimilarity = 100;
-    let newSimilarity = parseInt(similarityThresholdInput, 10);
-    
-    if (isNaN(newSimilarity) || newSimilarity < minSimilarity) {
-      newSimilarity = minSimilarity;
-    } else if (newSimilarity > maxSimilarity) {
-      newSimilarity = maxSimilarity;
-    }
-
-    // 检查值是否有变化
-    const granularityChanged = newGranularity !== granularity;
-    const canvasHeightChanged = newCanvasHeight !== canvasHeight;
-    const similarityChanged = newSimilarity !== similarityThreshold;
-    
-    if (granularityChanged) {
-      console.log(`Confirming new granularity: ${newGranularity}`);
-      setGranularity(newGranularity);
-    }
-
-    if (canvasHeightChanged) {
-      console.log(`Confirming new canvas height: ${newCanvasHeight}`);
-      setCanvasHeight(newCanvasHeight);
-    }
-    
-    if (similarityChanged) {
-      console.log(`Confirming new similarity threshold: ${newSimilarity}`);
-      setSimilarityThreshold(newSimilarity);
-    }
-    
-    // 只有在有值变化时才触发重映射
-    if (granularityChanged || canvasHeightChanged || similarityChanged) {
-      setRemapTrigger(prev => prev + 1);
-      setSelectedCanvasPreset(`${newGranularity}×${newCanvasHeight}`);
-      // 退出手动上色模式
-      setIsManualColoringMode(false);
-      setSelectedColor(null);
-    }
-
-    // 始终同步输入框的值
-    setGranularityInput(newGranularity.toString());
-    setCanvasHeightInput(newCanvasHeight.toString());
-    setSimilarityThresholdInput(newSimilarity.toString());
-  };
-
   const handleSelectCanvasPreset = (preset: { label: string; width: number; height: number }) => {
     const preservedHeight = getPreservedCanvasHeight(preset.width, preset.height);
-    setSelectedCanvasPreset(`${preset.width}×${preservedHeight}`);
     setGranularity(preset.width);
     setCanvasHeight(preservedHeight);
-    setGranularityInput(preset.width.toString());
-    setCanvasHeightInput(preservedHeight.toString());
     setRemapTrigger(prev => prev + 1);
     setIsManualColoringMode(false);
     setSelectedColor(null);
-  };
-
-  // 添加像素化模式切换处理函数
-  const handlePixelationModeChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const newMode = event.target.value as PixelationMode;
-    if (Object.values(PixelationMode).includes(newMode)) {
-        setPixelationMode(newMode);
-        setRemapTrigger(prev => prev + 1); // 触发重新映射
-        setIsManualColoringMode(false); // 退出手动模式
-        setSelectedColor(null);
-    } else {
-        console.warn(`无效的像素化模式: ${newMode}`);
-    }
   };
 
   // 修改pixelateImage函数接收模式参数
@@ -963,9 +829,7 @@ export default function Home() {
       }
       if (M !== gridHeightCount) {
         setCanvasHeight(M);
-        setCanvasHeightInput(M.toString());
       }
-      setSelectedCanvasPreset(`${N}×${M}`);
 
       originalCanvas.width = img.width; originalCanvas.height = img.height;
       pixelatedCanvas.width = outputWidth; pixelatedCanvas.height = outputHeight;
@@ -1127,7 +991,6 @@ export default function Home() {
   // 当 remapTrigger 变化时清空撤回历史（参数调整/颜色排除/新图上传等均会触发 remap）
   useEffect(() => {
     clearEditHistory();
-    setBgRemovalSnapshot(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remapTrigger]);
 
@@ -1327,114 +1190,6 @@ export default function Home() {
         clearEditHistory();
         setBgRemovalSnapshot(null);
     };
-
-  // 一键去背景：识别边缘主色并洪水填充去除
-  const handleAutoRemoveBackground = () => {
-    if (!mappedPixelData || !gridDimensions) {
-      alert('请先生成图纸后再使用一键去背景。');
-      return;
-    }
-
-    // 保存快照用于单步撤回
-    setBgRemovalSnapshot({
-      mappedPixelData: mappedPixelData.map(row => row.map(cell => ({ ...cell }))),
-      colorCounts: colorCounts ? { ...colorCounts } : {},
-      totalBeadCount,
-    });
-    // 去背景会大幅改变数据，清空编辑撤回历史
-    setEditHistory([]);
-
-    const { N, M } = gridDimensions;
-    const borderCounts = new Map<string, number>();
-
-    const countBorderCell = (row: number, col: number) => {
-      const cell = mappedPixelData[row]?.[col];
-      if (!cell || cell.isExternal || cell.key === TRANSPARENT_KEY) return;
-      borderCounts.set(cell.key, (borderCounts.get(cell.key) || 0) + 1);
-    };
-
-    for (let col = 0; col < N; col++) {
-      countBorderCell(0, col);
-      if (M > 1) countBorderCell(M - 1, col);
-    }
-    for (let row = 1; row < M - 1; row++) {
-      countBorderCell(row, 0);
-      if (N > 1) countBorderCell(row, N - 1);
-    }
-
-    if (borderCounts.size === 0) {
-      alert('边缘没有可识别的背景颜色。');
-      return;
-    }
-
-    let targetKey = '';
-    let maxCount = -1;
-    borderCounts.forEach((count, key) => {
-      if (count > maxCount) {
-        maxCount = count;
-        targetKey = key;
-      }
-    });
-
-    const newPixelData = mappedPixelData.map(row => row.map(cell => ({ ...cell })));
-    const visited = Array(M).fill(null).map(() => Array(N).fill(false));
-    const stack: { row: number; col: number }[] = [];
-
-    const pushIfTarget = (row: number, col: number) => {
-      if (row < 0 || row >= M || col < 0 || col >= N || visited[row][col]) {
-        return;
-      }
-      const cell = newPixelData[row][col];
-      if (!cell || cell.isExternal || cell.key !== targetKey) return;
-      visited[row][col] = true;
-      stack.push({ row, col });
-    };
-
-    for (let col = 0; col < N; col++) {
-      pushIfTarget(0, col);
-      if (M > 1) pushIfTarget(M - 1, col);
-    }
-    for (let row = 1; row < M - 1; row++) {
-      pushIfTarget(row, 0);
-      if (N > 1) pushIfTarget(row, N - 1);
-    }
-
-    if (stack.length === 0) {
-      alert('未找到可去除的背景区域。');
-      return;
-    }
-
-    while (stack.length > 0) {
-      const { row, col } = stack.pop()!;
-      newPixelData[row][col] = { ...transparentColorData };
-      pushIfTarget(row - 1, col);
-      pushIfTarget(row + 1, col);
-      pushIfTarget(row, col - 1);
-      pushIfTarget(row, col + 1);
-    }
-
-    setMappedPixelData(newPixelData);
-
-    const newColorCounts: { [hexKey: string]: { count: number; color: string } } = {};
-    let newTotalCount = 0;
-    newPixelData.flat().forEach(cell => {
-      if (cell && !cell.isExternal && cell.key !== TRANSPARENT_KEY) {
-        const cellHex = cell.color.toUpperCase();
-        if (!newColorCounts[cellHex]) {
-          newColorCounts[cellHex] = {
-            count: 0,
-            color: cellHex
-          };
-        }
-        newColorCounts[cellHex].count++;
-        newTotalCount++;
-      }
-    });
-
-    setColorCounts(newColorCounts);
-    setTotalBeadCount(newTotalCount);
-    setInitialGridColorKeys(new Set(Object.keys(newColorCounts)));
-  };
 
   // --- Tooltip Logic ---
 
@@ -1706,13 +1461,11 @@ export default function Home() {
       ...prev,
       [normalizedHex]: isSelected
     }));
-    setIsCustomPalette(true);
   };
 
   // 保存自定义色板并应用
   const handleSaveCustomPalette = () => {
     savePaletteSelections(customPaletteSelections);
-    setIsCustomPalette(true);
     setIsCustomPaletteEditorOpen(false);
     // 触发图像重新处理
     setRemapTrigger(prev => prev + 1);
@@ -1801,7 +1554,6 @@ export default function Home() {
         const allHexValues = fullBeadPalette.map(color => color.hex.toUpperCase());
         const newSelections = presetToSelections(allHexValues, validHexValues);
         setCustomPaletteSelections(newSelections);
-        setIsCustomPalette(true); // 标记为自定义
         alert(`成功导入 ${validHexValues.length} 个颜色！`);
 
       } catch (error) {
