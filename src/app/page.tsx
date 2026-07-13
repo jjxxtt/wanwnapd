@@ -1188,7 +1188,6 @@ export default function Home() {
         setIsManualColoringMode(false);
         setSelectedColor(null);
         clearEditHistory();
-        setBgRemovalSnapshot(null);
     };
 
   // --- Tooltip Logic ---
