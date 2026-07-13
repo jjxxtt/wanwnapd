@@ -2256,7 +2256,7 @@ export default function Home() {
             </h3>
             {/* Subtitle color */}
             <p className="text-xs text-center text-gray-500 dark:text-gray-400 mb-3">点击色号可临时排除颜色。总计: {totalBeadCount} 颗</p>
-            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 max-h-60 overflow-y-auto pr-1 text-sm">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(162px,1fr))] gap-2 max-h-60 overflow-y-auto pr-1 text-sm">
               {Object.keys(colorCounts)
                 .sort(sortColorKeys)
                 .map((hexKey) => {
@@ -2271,24 +2271,24 @@ export default function Home() {
                       key={hexKey}
                       onClick={() => handleToggleExcludeColor(hexKey)}
                        // Apply dark mode styles for list items (normal and excluded)
-                      className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 cursor-pointer transition-colors ${ 
+                      className={`flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 py-2 cursor-pointer transition-colors ${
                         isExcluded
                           ? 'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-950/30 opacity-60 dark:opacity-70'
                           : 'border-gray-200 bg-white hover:border-pink-200 hover:bg-pink-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-pink-400/30 dark:hover:bg-pink-950/20'
                       }`}
                       title={isExcluded ? `点击恢复 ${displayColorKey}` : `点击排除 ${displayColorKey}`}
                     >
-                      <div className={`min-w-0 flex items-center space-x-2 ${isExcluded ? 'line-through' : ''}`}>
+                      <div className={`min-w-0 flex flex-1 items-center gap-2 ${isExcluded ? 'line-through' : ''}`}>
                         {/* Adjust color swatch border */}
                         <span
-                          className="inline-block w-5 h-5 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0"
+                          className="inline-block h-5 w-5 flex-shrink-0 rounded border border-gray-300 dark:border-gray-600"
                           style={{ backgroundColor: isExcluded ? '#666' : colorHex }} // Darker gray for excluded swatch
                         ></span>
                         {/* Adjust text color for key (normal and excluded) */}
                         <span className={`truncate font-mono font-semibold ${isExcluded ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>{displayColorKey}</span>
                       </div>
                       {/* Adjust text color for count (normal and excluded) */}
-                      <span className={`shrink-0 font-mono text-xs ${isExcluded ? 'text-red-600 dark:text-red-400 line-through' : 'text-gray-600 dark:text-gray-300'}`}>x{count}</span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-xs ${isExcluded ? 'bg-red-100 text-red-600 line-through dark:bg-red-500/10 dark:text-red-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>x{count}</span>
                     </li>
                   );
                 })}
