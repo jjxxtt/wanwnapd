@@ -1,6 +1,7 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useRef, ChangeEvent, DragEvent, useEffect, useMemo, useCallback } from 'react';
+import Image from 'next/image';
 import Script from 'next/script';
 import InstallPWA from '../components/InstallPWA';
 
@@ -117,8 +118,8 @@ export default function Home() {
   const [canvasHeight, setCanvasHeight] = useState<number>(100);
   const [canvasHeightInput, setCanvasHeightInput] = useState<string>("100");
   const [selectedCanvasPreset, setSelectedCanvasPreset] = useState<string>("100×100");
-  const [similarityThreshold, setSimilarityThreshold] = useState<number>(30);
-  const [similarityThresholdInput, setSimilarityThresholdInput] = useState<string>("30");
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0);
+  const [similarityThresholdInput, setSimilarityThresholdInput] = useState<string>("0");
   // 添加像素化模式状态
   const [pixelationMode, setPixelationMode] = useState<PixelationMode>(PixelationMode.Dominant); // 默认为卡通模式
   
@@ -135,6 +136,7 @@ export default function Home() {
   const [initialGridColorKeys, setInitialGridColorKeys] = useState<Set<string>>(new Set());
   const [mappedPixelData, setMappedPixelData] = useState<MappedPixel[][] | null>(null);
   const [gridDimensions, setGridDimensions] = useState<{ N: number; M: number } | null>(null);
+  const [sourceImageAspectRatio, setSourceImageAspectRatio] = useState<number | null>(null);
   const [colorCounts, setColorCounts] = useState<{ [key: string]: { count: number; color: string } } | null>(null);
   const [totalBeadCount, setTotalBeadCount] = useState<number>(0);
   const [tooltipData, setTooltipData] = useState<{ x: number, y: number, key: string, color: string } | null>(null);
@@ -240,6 +242,14 @@ export default function Home() {
   // --- 撤回功能 ---
 
   // 保存编辑快照到历史栈
+  const getPreservedCanvasHeight = useCallback((canvasWidth: number, fallbackHeight: number) => {
+    if (!sourceImageAspectRatio || sourceImageAspectRatio <= 0) {
+      return fallbackHeight;
+    }
+
+    return Math.max(1, Math.round(canvasWidth / sourceImageAspectRatio));
+  }, [sourceImageAspectRatio]);
+
   const saveEditSnapshot = useCallback(() => {
     if (!mappedPixelData || !colorCounts) return;
     const snapshot: EditSnapshot = {
@@ -631,6 +641,7 @@ export default function Home() {
           setMappedPixelData(mappedPixelData);
           setGridDimensions(gridDimensions);
           setOriginalImageSrc(null); // CSV导入时没有原始图片
+          setSourceImageAspectRatio(null);
           
           // 计算颜色统计
           const colorCountsMap: { [key: string]: { count: number; color: string } } = {};
@@ -684,6 +695,7 @@ export default function Home() {
       // 处理图片文件
       const applyImageSrc = (result: string) => {
         setOriginalImageSrc(result);
+        setSourceImageAspectRatio(null);
         setMappedPixelData(null);
         setGridDimensions(null);
         setColorCounts(null);
@@ -693,6 +705,10 @@ export default function Home() {
         const defaultGranularity = 100;
         setGranularity(defaultGranularity);
         setGranularityInput(defaultGranularity.toString());
+        setCanvasHeight(defaultGranularity);
+        setCanvasHeightInput(defaultGranularity.toString());
+        setSimilarityThreshold(0);
+        setSimilarityThresholdInput('0');
         setRemapTrigger(prev => prev + 1); // Trigger full remap for new image
       };
 
@@ -792,6 +808,10 @@ export default function Home() {
       newCanvasHeight = maxGranularity;
     }
 
+    if (originalImageSrc) {
+      newCanvasHeight = getPreservedCanvasHeight(newGranularity, newCanvasHeight);
+    }
+
     // 处理相似度阈值
     const minSimilarity = 0;
     const maxSimilarity = 100;
@@ -839,11 +859,12 @@ export default function Home() {
   };
 
   const handleSelectCanvasPreset = (preset: { label: string; width: number; height: number }) => {
-    setSelectedCanvasPreset(preset.label);
+    const preservedHeight = getPreservedCanvasHeight(preset.width, preset.height);
+    setSelectedCanvasPreset(`${preset.width}×${preservedHeight}`);
     setGranularity(preset.width);
-    setCanvasHeight(preset.height);
+    setCanvasHeight(preservedHeight);
     setGranularityInput(preset.width.toString());
-    setCanvasHeightInput(preset.height.toString());
+    setCanvasHeightInput(preservedHeight.toString());
     setRemapTrigger(prev => prev + 1);
     setIsManualColoringMode(false);
     setSelectedColor(null);
@@ -906,7 +927,9 @@ export default function Home() {
     img.onload = () => {
       console.log("Image loaded successfully.");
       const N = gridWidthCount;
-      const M = gridHeightCount;
+      const currentImageAspectRatio = img.width / img.height;
+      setSourceImageAspectRatio(currentImageAspectRatio);
+      const M = Math.max(1, Math.round(gridWidthCount / currentImageAspectRatio));
       if (N <= 0 || M <= 0) { console.error("Invalid grid dimensions:", { N, M }); return; }
       console.log(`Grid size: ${N}x${M}`);
 
@@ -938,6 +961,12 @@ export default function Home() {
       if (N > 100) {
         console.log(`💡 由于格子数量较多 (${N}x${M})，画布已自动放大以保持清晰度。可以使用水平滚动查看完整图像。`);
       }
+      if (M !== gridHeightCount) {
+        setCanvasHeight(M);
+        setCanvasHeightInput(M.toString());
+      }
+      setSelectedCanvasPreset(`${N}×${M}`);
+
       originalCanvas.width = img.width; originalCanvas.height = img.height;
       pixelatedCanvas.width = outputWidth; pixelatedCanvas.height = outputHeight;
       console.log(`Canvas dimensions: Original ${img.width}x${img.height}, Output ${outputWidth}x${outputHeight}`);
@@ -2205,6 +2234,50 @@ export default function Home() {
             把喜欢的角色和日常小物，变成一颗一颗闪闪发光的拼豆图纸
           </p>
 
+          <section className="mt-6 w-full max-w-5xl">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  src: '/pixel-heart.svg',
+                  title: '心动拼图',
+                  desc: '适合头像、礼物和小挂件',
+                },
+                {
+                  src: '/pixel-star.svg',
+                  title: '闪光灵感',
+                  desc: '适合角色徽章和纪念小卡',
+                },
+                {
+                  src: '/pixel-beads.svg',
+                  title: '豆豆配色',
+                  desc: '像素格感更强，拿来就能用',
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="group rounded-[1.25rem] border border-pink-100 bg-white/78 p-3 shadow-sm shadow-pink-100/40 backdrop-blur dark:border-pink-400/20 dark:bg-gray-950/65"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-[1rem] border border-gray-100 bg-[#fffafc] p-2 dark:border-gray-800 dark:bg-gray-900">
+                      <Image
+                        src={item.src}
+                        alt={item.title}
+                        width={128}
+                        height={128}
+                        className="h-full w-full select-none"
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-gray-900 dark:text-white">{item.title}</div>
+                      <div className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{item.desc}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
           {/* 横屏设备弹窗 */}
           {showDesktopModal && (
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowDesktopModal(false)}>
@@ -2310,8 +2383,9 @@ export default function Home() {
 
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   {canvasSizePresets.map((preset) => {
-                    const beadCount = preset.width * preset.height;
-                    const isSelected = selectedCanvasPreset === preset.label && granularity === preset.width && canvasHeight === preset.height;
+                    const preservedPresetHeight = getPreservedCanvasHeight(preset.width, preset.height);
+                    const beadCount = preset.width * preservedPresetHeight;
+                    const isSelected = granularity === preset.width;
                     return (
                       <button
                         key={preset.label}
@@ -2331,141 +2405,6 @@ export default function Home() {
                   })}
                 </div>
               </section>
-            )}
-
-            {/* ++ HIDE Control Row in manual mode ++ */}
-            {!isManualColoringMode && (
-              <details className="w-full max-w-4xl rounded-2xl border border-pink-100 bg-white/78 shadow-lg shadow-pink-100/30 backdrop-blur dark:border-pink-400/20 dark:bg-gray-950/70">
-                <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                  <span>高级设置</span>
-                  <span className="text-xs font-medium text-pink-500 dark:text-pink-300">默认已适合快速出图</span>
-                </summary>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 sm:p-5 border-t border-pink-100 dark:border-pink-400/20">
-                {/* Canvas Width Input */}
-                <div className="flex-1">
-                  {/* Label color */}
-                  <label htmlFor="granularityInput" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
-                    画幅宽度 (10-300):
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {/* Input field styles */}
-                    <input
-                      type="number"
-                      id="granularityInput"
-                      value={granularityInput}
-                      onChange={handleGranularityInputChange}
-                      className="w-full p-1.5 border border-pink-200 dark:border-pink-400/20 rounded-lg text-sm focus:ring-pink-400 focus:border-pink-400 h-9 shadow-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
-                      min="10"
-                      max="300"
-                    />
-                  </div>
-                </div>
-
-                {/* Canvas Height Input */}
-                <div className="flex-1">
-                    <label htmlFor="canvasHeightInput" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
-                        画幅高度 (10-300):
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        id="canvasHeightInput"
-                        value={canvasHeightInput}
-                        onChange={handleCanvasHeightInputChange}
-                        className="w-full p-1.5 border border-pink-200 dark:border-pink-400/20 rounded-lg text-sm focus:ring-pink-400 focus:border-pink-400 h-9 shadow-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
-                        min="10"
-                        max="300"
-                      />
-                    </div>
-                </div>
-
-                {/* Similarity Threshold Input */}
-                <div className="sm:col-span-2">
-                    {/* Label color */}
-                    <label htmlFor="similarityThresholdInput" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
-                        颜色合并阈值 (0-100):
-                    </label>
-                    <div className="flex items-center gap-2">
-                      {/* Input field styles */}
-                      <input
-                        type="number"
-                        id="similarityThresholdInput"
-                        value={similarityThresholdInput}
-                        onChange={handleSimilarityThresholdInputChange}
-                        className="w-full p-1.5 border border-pink-200 dark:border-pink-400/20 rounded-lg text-sm focus:ring-pink-400 focus:border-pink-400 h-9 shadow-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
-                        min="0"
-                        max="100"
-                      />
-                    </div>
-                </div>
-
-                {/* 快捷按钮 */}
-                <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={handleConfirmParameters}
-                    className="h-9 bg-pink-500 hover:bg-pink-600 text-white text-sm px-3 rounded-lg whitespace-nowrap transition-colors duration-200 shadow-sm"
-                  >
-                    应用数字
-                  </button>
-                  <button
-                    onClick={handleAutoRemoveBackground}
-                    disabled={!mappedPixelData || !gridDimensions}
-                    className="inline-flex items-center justify-center h-9 px-3 text-sm rounded-lg border border-violet-200 dark:border-violet-400/30 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-200 hover:bg-violet-100 dark:hover:bg-violet-800/30 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
-                    一键去背景
-                  </button>
-                  <button
-                    onClick={handleUndoBgRemoval}
-                    disabled={!bgRemovalSnapshot}
-                    className="inline-flex items-center justify-center h-9 px-3 text-sm rounded-lg border border-sky-200 dark:border-sky-400/30 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-200 hover:bg-sky-100 dark:hover:bg-sky-800/30 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
-                    回撤上一步
-                  </button>
-                </div>
-
-                {/* Pixelation Mode Selector */}
-                <div className="sm:col-span-2">
-                  {/* Label color */}
-                  <label htmlFor="pixelationModeSelect" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">处理模式:</label>
-                  <div className="flex items-center gap-2">
-                    {/* Select field styles */}
-                    <select
-                      id="pixelationModeSelect"
-                      value={pixelationMode}
-                      onChange={handlePixelationModeChange}
-                      className="w-full p-1.5 border border-pink-200 dark:border-pink-400/20 rounded-lg text-sm focus:ring-pink-400 focus:border-pink-400 h-9 shadow-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200"
-                    >
-                      <option value={PixelationMode.Dominant} className="bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200">卡通 (主色)</option>
-                      <option value={PixelationMode.Average} className="bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200">真实 (平均)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 色号系统 */}
-                <div className="sm:col-span-2">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">色号系统:</label>
-                  <div className="inline-flex rounded-lg border border-pink-200 bg-pink-50 px-3 py-2 text-sm font-semibold text-pink-700 dark:border-pink-400/20 dark:bg-pink-950/20 dark:text-pink-200">
-                    MARD
-                  </div>
-                </div>
-
-                {/* 自定义色板按钮 */}
-                <div className="sm:col-span-2 mt-3">
-                  <button
-                    onClick={() => setIsCustomPaletteEditorOpen(true)}
-                    className="w-full py-2.5 px-3 flex items-center justify-center gap-2 bg-gradient-to-r from-pink-500 via-fuchsia-500 to-violet-500 text-white font-medium rounded-xl shadow-sm transition-all duration-200 hover:shadow-md hover:from-pink-600 hover:to-violet-600"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" />
-                    </svg>
-                    管理色板 ({Object.values(customPaletteSelections).filter(Boolean).length} 色)
-                  </button>
-                  {isCustomPalette && (
-                    <p className="text-xs text-center text-blue-500 dark:text-blue-400 mt-1.5">当前使用自定义色板</p>
-                  )}
-                </div>
-              </div>
-              </details>
             )}
 
             {/* 自定义色板编辑器弹窗 - 这是新增的部分 */}
