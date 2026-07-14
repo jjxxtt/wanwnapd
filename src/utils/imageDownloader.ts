@@ -46,6 +46,20 @@ function sortColorKeys(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
+function getStatsGridLayout(
+  itemCount: number,
+  availableWidth: number,
+  statsFontSize: number,
+  chipGap: number
+): { columns: number; rows: number; chipWidth: number } {
+  const minChipWidth = Math.max(118, Math.floor(statsFontSize * 6.8));
+  const columns = Math.max(1, Math.floor((availableWidth + chipGap) / (minChipWidth + chipGap)));
+  const chipWidth = Math.floor((availableWidth - (columns - 1) * chipGap) / columns);
+  const rows = Math.max(1, Math.ceil(itemCount / columns));
+
+  return { columns, rows, chipWidth };
+}
+
 // 导出CSV hex数据的函数
 export function exportCsvData({
   mappedPixelData,
@@ -281,6 +295,9 @@ export async function downloadImage({
     // 计算二维码大小
     const qrSize = Math.floor(titleBarHeight * 0.85); // 增大二维码比例
 
+    // 调整画布大小，包含标题栏、坐标轴、统计区域和品牌标识区域（四边都有坐标）
+    const downloadWidth = gridWidth + (axisLabelSize * 2) + extraLeftMargin + extraRightMargin;
+
     // 计算统计区域的大小
     if (includeStats && colorCounts) {
       const colorKeys = Object.keys(colorCounts);
@@ -290,29 +307,14 @@ export async function downloadImage({
 
       const chipHeight = Math.max(30, statsFontSize + 16);
       const chipGap = 10;
-      let rowCount = 1;
-      let currentRowWidth = 0;
+      const availableWidth = downloadWidth - (statsPadding * 2);
+      const { rows: rowCount } = getStatsGridLayout(colorKeys.length, availableWidth, statsFontSize, chipGap);
 
-      colorKeys.forEach((key) => {
-        const label = getColorKeyByHex(key, selectedColorSystem);
-        const count = colorCounts[key].count;
-        const estimatedWidth = Math.max(88, (label.length + String(count).length + 4) * statsFontSize * 0.62 + 34);
-
-        if (currentRowWidth > 0 && currentRowWidth + estimatedWidth + chipGap > preCalcAvailableWidth) {
-          rowCount++;
-          currentRowWidth = estimatedWidth;
-        } else {
-          currentRowWidth += estimatedWidth + (currentRowWidth > 0 ? chipGap : 0);
-        }
-      });
-
-      const titleHeight = 28;
+      const titleHeight = 34;
       const footerHeight = 28;
       statsHeight = titleHeight + (rowCount * chipHeight) + ((rowCount - 1) * chipGap) + footerHeight + (statsPadding * 2) + statsTopMargin;
     }
 
-    // 调整画布大小，包含标题栏、坐标轴、统计区域和品牌标识区域（四边都有坐标）
-    const downloadWidth = gridWidth + (axisLabelSize * 2) + extraLeftMargin + extraRightMargin;
     let downloadHeight = titleBarHeight + gridHeight + (axisLabelSize * 2) + statsHeight + extraTopMargin + extraBottomMargin + xiaohongshuAreaHeight;
 
     let downloadCanvas = document.createElement('canvas');
@@ -601,36 +603,71 @@ export async function downloadImage({
       M * downloadCellSize
     );
 
-    // 副水印：放在网格左上角，简洁版本
-    const secondaryWatermarkFontSize = Math.max(10, Math.floor(downloadCellSize * 0.5));
+    // 副水印：放在网格左上角，圆润轻盈版本
+    const secondaryWatermarkFontSize = Math.max(12, Math.floor(downloadCellSize * 0.5));
     const secondaryText = '婉婉拼豆';
 
-    ctx.font = `500 ${secondaryWatermarkFontSize}px system-ui, -apple-system, sans-serif`;
+    ctx.font = `700 ${secondaryWatermarkFontSize}px system-ui, -apple-system, sans-serif`;
     const secondaryMetrics = ctx.measureText(secondaryText);
     const secondaryWidth = secondaryMetrics.width;
-    const secondaryHeight = secondaryWatermarkFontSize;
+    const secondaryHeight = Math.floor(secondaryWatermarkFontSize * 1.9);
 
+    const secondaryBgPaddingX = 12;
+    const secondaryBgWidth = secondaryWidth + secondaryBgPaddingX * 2 + secondaryWatermarkFontSize * 0.9;
     const secondaryWatermarkX = extraLeftMargin + axisLabelSize + 15;
-    const secondaryWatermarkY = titleBarHeight + extraTopMargin + axisLabelSize + secondaryHeight + 15;
+    const secondaryWatermarkY = titleBarHeight + extraTopMargin + axisLabelSize + 15;
+    const secondaryRadius = secondaryHeight / 2;
 
     // 副水印背景
-    const secondaryBgPadding = 4;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.save();
+    ctx.shadowColor = 'rgba(236, 72, 153, 0.18)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
     ctx.beginPath();
     ctx.roundRect(
-      secondaryWatermarkX - secondaryBgPadding,
-      secondaryWatermarkY - secondaryHeight - secondaryBgPadding,
-      secondaryWidth + secondaryBgPadding * 2,
-      secondaryHeight + secondaryBgPadding * 2,
-      3
+      secondaryWatermarkX,
+      secondaryWatermarkY,
+      secondaryBgWidth,
+      secondaryHeight,
+      secondaryRadius
     );
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(236, 72, 153, 0.28)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(
+      secondaryWatermarkX + 0.5,
+      secondaryWatermarkY + 0.5,
+      secondaryBgWidth - 1,
+      secondaryHeight - 1,
+      secondaryRadius
+    );
+    ctx.stroke();
+
+    const beadDotX = secondaryWatermarkX + secondaryBgPaddingX + secondaryWatermarkFontSize * 0.25;
+    const beadDotY = secondaryWatermarkY + secondaryHeight / 2;
+    const beadDotRadius = secondaryWatermarkFontSize * 0.28;
+    ctx.fillStyle = '#F9A8D4';
+    ctx.beginPath();
+    ctx.arc(beadDotX, beadDotY, beadDotRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.beginPath();
+    ctx.arc(beadDotX, beadDotY, beadDotRadius * 0.38, 0, Math.PI * 2);
     ctx.fill();
 
     // 副水印文字
-    ctx.fillStyle = '#6B7280'; // 中等灰色，存在但不突兀
+    ctx.fillStyle = '#A21CAF';
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(secondaryText, secondaryWatermarkX, secondaryWatermarkY);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      secondaryText,
+      secondaryWatermarkX + secondaryBgPaddingX + secondaryWatermarkFontSize * 0.75,
+      secondaryWatermarkY + secondaryHeight / 2
+    );
 
     // 绘制统计信息
     if (includeStats && colorCounts) {
@@ -658,25 +695,23 @@ export async function downloadImage({
       const chipHeight = Math.max(30, statsFontSize + 16);
       const chipGap = 10;
       const swatchSize = Math.max(18, Math.floor(chipHeight * 0.58));
-      let chipX = statsPadding;
-      let chipY = statsY + titleHeight;
-      let rowCount = 1;
+      const availableWidth = downloadWidth - (statsPadding * 2);
+      const { columns: chipColumns, rows: rowCount, chipWidth } = getStatsGridLayout(
+        colorKeys.length,
+        availableWidth,
+        statsFontSize,
+        chipGap
+      );
+      const firstChipY = statsY + titleHeight;
 
-      colorKeys.forEach((key) => {
+      colorKeys.forEach((key, index) => {
         const cellData = colorCounts[key];
         const displayKey = getColorKeyByHex(key, selectedColorSystem);
         const countText = `x${cellData.count}`;
-        const labelText = `${displayKey} ${countText}`;
-
-        ctx.font = `bold ${statsFontSize}px system-ui, -apple-system, sans-serif`;
-        const textWidth = ctx.measureText(labelText).width;
-        const chipWidth = Math.max(90, textWidth + swatchSize + 20);
-
-        if (chipX > statsPadding && chipX + chipWidth > downloadWidth - statsPadding) {
-          chipX = statsPadding;
-          chipY += chipHeight + chipGap;
-          rowCount++;
-        }
+        const column = index % chipColumns;
+        const row = Math.floor(index / chipColumns);
+        const chipX = statsPadding + column * (chipWidth + chipGap);
+        const chipY = firstChipY + row * (chipHeight + chipGap);
 
         ctx.fillStyle = '#FFFFFF';
         ctx.strokeStyle = '#CBD5E1';
@@ -690,20 +725,20 @@ export async function downloadImage({
         ctx.fillRect(chipX + 1, chipY + 1, swatchSize + 10, chipHeight - 2);
 
         ctx.fillStyle = '#111827';
+        ctx.font = `bold ${statsFontSize}px system-ui, -apple-system, sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(displayKey, chipX + swatchSize + 18, chipY + chipHeight / 2);
 
         ctx.fillStyle = '#334155';
         ctx.font = `${statsFontSize}px system-ui, -apple-system, sans-serif`;
-        ctx.fillText(countText, chipX + chipWidth - ctx.measureText(countText).width - 10, chipY + chipHeight / 2);
-
-        chipX += chipWidth + chipGap;
+        ctx.textAlign = 'right';
+        ctx.fillText(countText, chipX + chipWidth - 10, chipY + chipHeight / 2);
       });
 
-      const totalY = chipY + chipHeight + 18;
-      ctx.font = `500 ${Math.max(10, Math.floor(statsFontSize * 0.72))}px system-ui, -apple-system, sans-serif`;
-      ctx.fillStyle = '#64748B';
+      const totalY = firstChipY + rowCount * chipHeight + (rowCount - 1) * chipGap + 18;
+      ctx.font = `700 ${Math.max(11, Math.floor(statsFontSize * 0.78))}px system-ui, -apple-system, sans-serif`;
+      ctx.fillStyle = '#A21CAF';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText('婉婉拼豆', statsPadding, totalY);
